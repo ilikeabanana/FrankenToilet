@@ -9,7 +9,7 @@ namespace FrankenToilet.Core.Extensions;
 [PublicAPI]
 public static class HarmonyExtensions
 {
-    
+
     extension(CodeMatcher matcher)
     {
         /// <summary>

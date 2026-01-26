@@ -3,6 +3,8 @@ using System.Threading;
 using HarmonyLib;
 using Steamworks;
 using FrankenToilet.Core.Extensions;
+using JetBrains.Annotations;
+
 namespace FrankenToilet.Core;
 /// <summary>
 /// A thread-safe random number generator seeded with the hash of the current user's SteamID.
@@ -11,6 +13,7 @@ namespace FrankenToilet.Core;
 ///     I don't know what'll happen if the user is not logged on...
 ///     Check using <see cref="SteamClient.IsLoggedOn"/> before construction
 /// </remarks>
+[PublicAPI]
 public class UserRandom() : Random(SteamClient.SteamId.Value.GetHashCode())
 {
     public static UserRandom Shared { get; } = new();
@@ -18,7 +21,6 @@ public class UserRandom() : Random(SteamClient.SteamId.Value.GetHashCode())
 
     public override int Next()
     {
-        var inst = CodeInstruction.StoreField(() => _lock);
         var taken = false;
         try { _lock.Enter(ref taken); return base.Next(); }
         finally { if (taken) _lock.Exit(false); }
@@ -36,7 +38,7 @@ public class UserRandom() : Random(SteamClient.SteamId.Value.GetHashCode())
         try { _lock.Enter(ref taken); return base.Next(minValue, maxValue); }
         finally { if (taken) _lock.Exit(false); }
     }
-    
+
     public override void NextBytes(byte[] buffer)
     {
         var taken = false;

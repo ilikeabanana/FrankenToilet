@@ -1,4 +1,5 @@
-﻿using System.Linq;
+﻿using System;
+using System.Linq;
 using System.Reflection;
 using BepInEx;
 using BepInEx.Logging;
@@ -14,11 +15,13 @@ public sealed class Plugin : BaseUnityPlugin
 {
     internal new static ManualLogSource Logger { get; private set; } = null!;
 
+    // Event invoked when the plugin awakes
+    internal static event Action OnPluginAwake = static () => { };
+
     private void Awake()
     {
-        // Plugin startup logic
         Logger = base.Logger;
-        LogInfo($"Plugin {MyPluginInfo.PLUGIN_GUID} is loaded!");
+        LogInfo("Welcome to Frankenstein's Toilet...");
         gameObject.hideFlags = HideFlags.DontSaveInEditor;
         var harmony = new Harmony(MyPluginInfo.PLUGIN_GUID);
         var startupPatchers = typeof(Plugin).Assembly
@@ -27,5 +30,6 @@ public sealed class Plugin : BaseUnityPlugin
         foreach (var startupPatcher in startupPatchers)
             harmony.PatchAll(startupPatcher);
         LogInfo("Patches applied");
+        OnPluginAwake.Invoke();
     }
 }

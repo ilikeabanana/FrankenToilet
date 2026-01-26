@@ -4,6 +4,7 @@ using System.Linq;
 using JetBrains.Annotations;
 
 namespace FrankenToilet.Core.Extensions;
+
 [PublicAPI]
 public static class EnumerableExtensions
 {

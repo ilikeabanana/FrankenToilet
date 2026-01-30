@@ -6,13 +6,11 @@ using FrankenToilet.Core;
 
 namespace FrankenToilet.earthling;
 
-[EntryPoint]
 public static class FishProvider
 {
     private static Dictionary<string, FishObject> fishes = new Dictionary<string, FishObject>();
     private static System.Random rand = new System.Random();
 
-    [EntryPoint]
     public static void LoadFishes() 
     {
         string[] fishPaths = {
@@ -34,6 +32,12 @@ public static class FishProvider
         {
             FishObject fish = Addressables.LoadAssetAsync<FishObject>(fishPath).WaitForCompletion();
             fishes.Add(fish.fishName, fish);
+        }
+
+        FishObject? chenFish = AssetBundleHelper.LoadAsset<FishObject>("Assets/Bundles/toiletonfire/chen fish.asset");
+        if (chenFish != null)
+        {
+            fishes.Add(chenFish.fishName, chenFish);
         }
     }
 

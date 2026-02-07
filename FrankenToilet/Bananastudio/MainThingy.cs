@@ -201,16 +201,126 @@ public static class MainThingy
     public class EVILV1
     {
         public static List<Vector3> recordedPositions = new List<Vector3>();
+        static Vector3 defaultGravity = Vector3.zero;
+        class Buff
+        {
+            public bool isDebuff;
+            public System.Action<float> onApply;
+            public string name;
+            public Buff(bool debuff, System.Action<float> onApply, string name)
+            {
+                isDebuff = debuff;
+                this.onApply = onApply;
+                this.name = name;
+            }
+        }
+
+        static List<Buff> possibleBuffs = new List<Buff>()
+        {
+            new Buff(false, (amount) =>
+            {
+                NewMovement.Instance.walkSpeed *= amount;
+            }, "Movement Speed"),
+            new Buff(false, (amount) =>
+            {
+                NewMovement.Instance.jumpPower *= amount;
+            }, "Jump Height"),
+            new Buff(false, (amount) =>
+            {
+                DamageAchievements.damageMult = amount;
+            }, "Player Damage"),
+            new Buff(false, (amount) =>
+            {
+                
+                Physics.gravity *= amount;
+            }, "Gravity"),
+        };
 
         [HarmonyPostfix]
         public static void SpawnEvilV1()
         {
+            DamageAchievements.damageMult = 1;
+            if(defaultGravity == Vector3.zero)
+            {
+                defaultGravity = Physics.gravity;
+            }
+
+            Physics.gravity = defaultGravity;
             recordedPositions.Clear();
-            if(Random.value <= 0.35f) // 35% chance to spawn evil V1
+
+            if (Random.value <= 0.35f) // 35% chance to spawn evil V1
             {
                 HudMessageReceiver.Instance.SendHudMessage("<color=red>[WARNING]</color> Evil V1 is coming to your level in 5 seconds");
                 NewMovement.Instance.StartCoroutine(recordPositions());
                 NewMovement.Instance.StartCoroutine(spawnEvilV1());
+            }
+            else
+            {
+                // Calc buffs
+                int amountOfBuffs = Random.Range(1, possibleBuffs.Count + 1);
+                List<Buff> pool = new List<Buff>();
+                pool.AddRange(possibleBuffs);
+                Dictionary<Buff, float> selectedBuffs = new Dictionary<Buff, float>();
+
+                for (int i = 0; i < amountOfBuffs; i++)
+                {
+                    Buff randomBuff = pool[Random.Range(0, pool.Count)];
+                    pool.Remove(randomBuff);
+                    float amount = Random.Range(0.5f, 2f); // Better range for buffs/debuffs
+                    randomBuff.onApply.Invoke(amount);
+                    selectedBuffs.Add(randomBuff, amount);
+                }
+
+                // Separate buffs and debuffs
+                List<string> buffMessages = new List<string>();
+                List<string> debuffMessages = new List<string>();
+
+                foreach (var selBuff in selectedBuffs)
+                {
+                    bool isDebuff = false;
+                    if (selBuff.Key.isDebuff && selBuff.Value < 1) isDebuff = false;
+                    else if (!selBuff.Key.isDebuff && selBuff.Value >= 1) isDebuff = false;
+                    else isDebuff = true;
+
+                    string percentageChange = ((selBuff.Value - 1) * 100).ToString("F0");
+                    string sign = selBuff.Value >= 1 ? "+" : "";
+
+                    if (!isDebuff)
+                    {
+                        buffMessages.Add($"{selBuff.Key.name}: {sign}{percentageChange}%");
+                    }
+                    else
+                    {
+                        debuffMessages.Add($"{selBuff.Key.name}: {sign}{percentageChange}%");
+                    }
+                }
+
+                // Build and display message
+                string message = "";
+
+                if (buffMessages.Count > 0)
+                {
+                    message += "<color=green>BUFFS:</color>\n";
+                    foreach (string buff in buffMessages)
+                    {
+                        message += $"<color=green>+ {buff}</color>\n";
+                    }
+                }
+
+                if (debuffMessages.Count > 0)
+                {
+                    if (buffMessages.Count > 0) message += "\n";
+                    message += "<color=red>DEBUFFS:</color>\n";
+                    foreach (string debuff in debuffMessages)
+                    {
+                        message += $"<color=red>- {debuff}</color>\n";
+                    }
+                }
+
+                if (!string.IsNullOrEmpty(message))
+                {
+                    HudMessageReceiver.Instance.SendHudMessage(message.TrimEnd('\n'));
+                }
             }
         }
 
@@ -272,6 +382,8 @@ public static class MainThingy
     [HarmonyPatch(typeof(EnemyIdentifier), nameof(EnemyIdentifier.DeliverDamage))]
     public static class DamageAchievements
     {
+        public static float damageMult = 1;
+
         static bool firstDamage = true;
 
         const float WINDOW_DURATION = 0.25f;
@@ -288,9 +400,11 @@ public static class MainThingy
         static bool megaUnlocked = false;
         static bool ultraUnlocked = false;
 
-        public static void Postfix(EnemyIdentifier __instance, float multiplier)
+        public static void Postfix(EnemyIdentifier __instance, ref float multiplier)
         {
             if (__instance.dead) return;
+            multiplier += damageMult;
+
             if (firstDamage)
             {
                 firstDamage = false;

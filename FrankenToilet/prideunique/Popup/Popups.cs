@@ -115,7 +115,11 @@ public static class Popups
             f.mimicPosition = true;
              
             go.transform.GetChild(0).position = pos;
-            go.transform.GetChild(0).LookAt(CameraController.Instance.transform.position);
+
+            var co = go.transform.GetChild(0).gameObject.AddComponent<AlwaysLookAtCamera>();
+            co.useXAxis = true;
+            co.useYAxis = true;
+            co.useZAxis = true;
 
             vp.Play();
         };

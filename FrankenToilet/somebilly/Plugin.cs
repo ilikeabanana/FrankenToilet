@@ -23,8 +23,7 @@ using System.Collections.Generic;
 
 /*
 TODO:
-1. confetti
-2. 2
+1. 2
 */
 
 namespace FrankenToilet.somebilly {
@@ -74,7 +73,7 @@ namespace FrankenToilet.somebilly {
             rect.anchoredPosition = new Vector2(0f, -10f);
             rect.pivot = new Vector2(0.5f, 1f);
 
-            lineWelcome = new GameObject("lineWelcome");
+            lineWelcome = new GameObject("LineWelcome");
             lineWelcome.transform.SetParent(layout.transform);
             textWelcome = lineWelcome.AddComponent<TextMeshProUGUI>();
             textWelcome.fontSize = 28;
@@ -83,7 +82,8 @@ namespace FrankenToilet.somebilly {
 
             lineDate = new GameObject("LineDate");
             lineDate.transform.SetParent(layout.transform);
-            lineDate.AddComponent<GoodSwayer>();
+            GoodSwayer lineDateSwayer = lineDate.AddComponent<GoodSwayer>();
+            lineDateSwayer.speed = UnityEngine.Random.Range(1.75f, 4f);
             textDate = lineDate.AddComponent<TextMeshProUGUI>();
             textDate.fontSize = 28;
             textDate.enableWordWrapping = false;
@@ -91,7 +91,8 @@ namespace FrankenToilet.somebilly {
 
             lineRandom = new GameObject("LineRandom");
             lineRandom.transform.SetParent(layout.transform);
-            lineRandom.AddComponent<GoodScaler>();
+            GoodScaler lineRandomScaler = lineRandom.AddComponent<GoodScaler>();
+            lineRandomScaler.speed = UnityEngine.Random.Range(1.75f, 4f);
             textRandom = lineRandom.AddComponent<TextMeshProUGUI>();
             textRandom.fontSize = 28;
             textRandom.enableWordWrapping = false;
@@ -99,7 +100,8 @@ namespace FrankenToilet.somebilly {
 
             lineScene = new GameObject("LineScene");
             lineScene.transform.SetParent(layout.transform);
-            ((GoodSwayer)lineScene.AddComponent<GoodSwayer>()).progress = 4f;
+            GoodSwayer lineSceneSwayer = lineScene.AddComponent<GoodSwayer>();
+            lineSceneSwayer.speed = UnityEngine.Random.Range(1.75f, 4f);
             textScene = lineScene.AddComponent<TextMeshProUGUI>();
             textScene.fontSize = 28;
             textScene.enableWordWrapping = false;
@@ -127,8 +129,8 @@ namespace FrankenToilet.somebilly {
     public class GoodSwayer : MonoBehaviour {
         public float progress = 0f;
         public float speed = 2f;
-        public float minAngle = -6.5f;
-        public float maxAngle = 6.5f;
+        public float minAngle = -5f;
+        public float maxAngle = 5f;
         public void Update() {
             progress += Time.deltaTime * speed;
             progress = progress % (2f * Mathf.PI);
@@ -156,8 +158,30 @@ namespace FrankenToilet.somebilly {
     }
 
 
+    // ---------------
+    // ----- HUD -----
+    // ---------------
+    [PatchOnEntry]
+    [HarmonyPatch]
+    public static class HUDPatch {
+        [HarmonyPostfix]
+        [HarmonyPatch(typeof(OptionsMenuToManager), "Start")]
+        public static void Postfix(OptionsMenuToManager __instance) {
+            if (__instance.name != "Canvas") {
+                return;
+            }
+            GameObject info = new GameObject("FrankenInfo");
+            info.transform.SetParent(__instance.transform);
+            info.AddComponent<GoodInfoText>();
+        }
+    }
+
+
+
     // THIS IS THE BIB.
     public class Bib : MonoBehaviour {
+        public static Texture2D Confetti; public static AudioClip ConfettiSound;
+
         // MACHINES
         public static AudioClip VoiceV1;
         public static AudioClip VoiceSwordsmachine; public static AudioClip VoiceSwordsmachineAgony; public static AudioClip VoiceSwordsmachineTundra;
@@ -210,8 +234,33 @@ namespace FrankenToilet.somebilly {
         public static AudioClip VoiceGianniMatragrano;
 
 
-        public static T Ass<T>(string path) {
-            return Addressables.LoadAssetAsync<T>(path).WaitForCompletion();
+        public static Transform GetCanvas() {
+			Scene activeScene = SceneManager.GetActiveScene();
+			Transform canvas = (from obj in activeScene.GetRootGameObjects()
+				where obj.name == "Canvas"
+				select obj).First().transform;
+			return canvas;
+		}
+
+
+        public static Texture2D LoadEmbeddedTexture(string resourceName) {
+            Assembly assembly = Assembly.GetExecutingAssembly();
+            using Stream stream = assembly.GetManifestResourceStream(resourceName);
+            if (stream == null) {
+                LogHelper.LogError($"Embedded resource '{resourceName}' not found");
+                return null;
+            }
+
+            byte[] buffer = new byte[stream.Length];
+            stream.Read(buffer, 0, buffer.Length);
+
+            Texture2D tex = new Texture2D(2, 2);
+            if (tex.LoadImage(buffer)) {
+                return tex;
+            } else {
+                LogHelper.LogError("Failed to load embedded texture");
+                return null;
+            }
         }
 
         public void ObtainVoice(string path, System.Action<AudioClip> onLoaded) {
@@ -236,6 +285,9 @@ namespace FrankenToilet.somebilly {
         }
         
         public void MegaAss() {
+            Confetti = LoadEmbeddedTexture("FrankenToilet.somebilly.CONFETTI.png");
+            ObtainVoice("ENEMY_VOICE/CONFETTI_SOUND.ogg", clip => {Bib.ConfettiSound = clip;});
+
             // MACHINES
             ObtainVoice("ENEMY_VOICE/V1.ogg", clip => {Bib.VoiceV1 = clip;});
             ObtainVoice("ENEMY_VOICE/SWORDSMACHINE.ogg", clip => {Bib.VoiceSwordsmachine = clip;});
@@ -314,14 +366,8 @@ namespace FrankenToilet.somebilly {
             }
 
             if (Bib.CheckForVoiceObject(obj, voice.name)) {
-                LogHelper.LogInfo("SKIPPING VOICE");
-                LogHelper.LogInfo(obj);
-                LogHelper.LogInfo(voice.name);
                 return;
             }
-            LogHelper.LogInfo("PLAYING VOICE");
-            LogHelper.LogInfo(obj);
-            LogHelper.LogInfo(voice.name);
 
             GameObject voiceObject = new GameObject("FrankenVoiceObject");
             voiceObject.transform.SetParent(obj.transform);
@@ -335,19 +381,13 @@ namespace FrankenToilet.somebilly {
 
         public static bool CheckForVoiceObject(GameObject obj, string voiceName) {
             Transform tryFind = obj.transform.Find("FrankenVoiceObject");
-            LogHelper.LogInfo("tryFind == null");
-            LogHelper.LogInfo(tryFind == null);
             if (tryFind == null) {
                 return false;
             }
             AudioSource tryAudio = tryFind.GetComponent<AudioSource>();
-            LogHelper.LogInfo("tryAudio == null");
-            LogHelper.LogInfo(tryAudio == null);
             if (tryAudio == null) {
                 return false;
             }
-            LogHelper.LogInfo("tryAudio.clip.name == voiceName");
-            LogHelper.LogInfo(tryAudio.clip.name == voiceName);
             if (tryAudio.clip.name == voiceName) {
                 return true;
             }
@@ -360,25 +400,77 @@ namespace FrankenToilet.somebilly {
             }
             audio.mute = true;
         }
-    }
 
-    // ---------------
-    // ----- HUD -----
-    // ---------------
-    [PatchOnEntry]
-    [HarmonyPatch]
-    public static class HUDPatch {
-        [HarmonyPostfix]
-        [HarmonyPatch(typeof(OptionsMenuToManager), "Start")]
-        public static void Postfix(OptionsMenuToManager __instance) {
-            if (__instance.name != "Canvas") {
+
+        public void DoConfetti() {
+            Transform canvas = Bib.GetCanvas();
+
+            if (canvas == null) {
                 return;
             }
-            GameObject info = new GameObject("FrankenInfo");
-            info.transform.SetParent(__instance.transform);
-            info.AddComponent<GoodInfoText>();
+
+
+            GameObject confettiObject = new GameObject("Confetti");
+            confettiObject.transform.SetParent(canvas);
+            Plugin.bib.AddAndPlayVoice(confettiObject, Bib.ConfettiSound);
+            // confettiObject.transform.localPosition = new Vector3(0, 0, 0);
+            confettiObject.transform.localScale = new Vector3(1, 1, 1);
+            Vector3 pos = confettiObject.transform.position;
+
+            Image image = confettiObject.AddComponent<Image>();
+            image.sprite = Sprite.Create(Bib.Confetti, new Rect(0, 0, Confetti.width, Confetti.height), new Vector2(0.5f, 0.5f));
+
+            RectTransform rect = confettiObject.GetComponent<RectTransform>();
+            rect.anchorMin = Vector2.zero;
+            rect.anchorMax = Vector2.one;
+            rect.offsetMin = Vector2.zero;
+            rect.offsetMax = Vector2.zero;
+            RectTransform canvasRect = canvas.GetComponent<RectTransform>();
+            rect.anchoredPosition = new Vector2(0, canvasRect.sizeDelta.y);
+
+            confettiObject.AddComponent<RemoveAfter>();
+            ConfettiFall fall = confettiObject.AddComponent<ConfettiFall>();
+            fall.speed = Screen.height;
         }
     }
+
+
+
+
+    // --------------------
+    // ----- CONFETTI -----
+    // --------------------
+    public class RemoveAfter : MonoBehaviour {
+        public float time = 4f;
+        public float currentTime = 0f;
+        void Update() {
+            currentTime += Time.deltaTime;
+            if (currentTime >= time) {
+                UnityObject.Destroy(this.gameObject);
+            }
+        }
+    }
+
+    public class ConfettiFall : MonoBehaviour {
+        public float speed = 100f;
+        void Update() {
+            Vector3 pos = this.transform.position;
+            this.transform.position = new Vector3(pos.x, pos.y - speed * Time.deltaTime, pos.z);
+        }
+    }
+
+    [PatchOnEntry]
+    [HarmonyPatch]
+    public static class ConfettiPatch {
+        [HarmonyPostfix]
+        [HarmonyPatch(typeof(StyleHUD), "rankIndex", MethodType.Setter)]
+        public static void Postfix(int value, StyleHUD __instance) {
+            if (value == 7) {
+                Plugin.bib.DoConfetti();
+            }
+        }
+    }
+
 
     // --------------------
     // ----- MACHINES -----
